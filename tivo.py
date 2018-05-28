@@ -25,7 +25,7 @@ from homeassistant import util
 from homeassistant.components.media_player import (
     MEDIA_TYPE_TVSHOW, MEDIA_TYPE_VIDEO, SUPPORT_PAUSE, SUPPORT_PLAY_MEDIA,
     SUPPORT_TURN_OFF, SUPPORT_TURN_ON, SUPPORT_STOP, PLATFORM_SCHEMA,
-    SUPPORT_NEXT_TRACK, SUPPORT_PREVIOUS_TRACK, SUPPORT_PLAY, MediaPlayerDevice)
+    SUPPORT_NEXT_TRACK, SUPPORT_PREVIOUS_TRACK, SUPPORT_PLAY, SUPPORT_SELECT_SOURCE, MediaPlayerDevice)
 from homeassistant.const import (
     CONF_DEVICE, CONF_HOST, CONF_NAME, STATE_OFF, STATE_PLAYING, CONF_PORT, CONF_USERNAME, CONF_PASSWORD)
 import homeassistant.helpers.config_validation as cv
@@ -35,7 +35,7 @@ from homeassistant.util.json import load_json, save_json
 
 _LOGGER = logging.getLogger(__name__)
 
-DEFAULT_NAME = 'Tivo Receiver'
+DEFAULT_NAME = 'TiVo Receiver'
 DEFAULT_PORT = 31339
 DEFAULT_DEVICE = '0'
 
@@ -49,7 +49,7 @@ ZAP_SCAN_INTERVAL = timedelta(seconds=300)
 SUPPORT_TIVO = SUPPORT_PAUSE |\
     SUPPORT_PLAY_MEDIA | SUPPORT_STOP | SUPPORT_NEXT_TRACK |\
     SUPPORT_TURN_ON | SUPPORT_TURN_OFF |\
-    SUPPORT_PREVIOUS_TRACK | SUPPORT_PLAY
+    SUPPORT_PREVIOUS_TRACK | SUPPORT_SELECT_SOURCE | SUPPORT_PLAY
 
 DATA_TIVO = "data_tivo"
 
@@ -149,6 +149,9 @@ class TivoDevice(MediaPlayerDevice):
         self._current = {}
         self._ignore = {}
         self.sock = None
+
+        self._source = None
+        self._source_list = []
 
         debug = bool(int(debug))
         self.debug = debug
@@ -435,6 +438,37 @@ class TivoDevice(MediaPlayerDevice):
             self._is_standby = True
 
     @property
+    def source(self):
+        """Return the current input source."""
+        return None
+
+    @property
+    def source_list(self):
+        """Set the input source."""
+        return ["TiVo","Live TV","Guide","Now Playing","My Shows","On-Demand","Netflix"]
+
+    @property
+    def select_source(self, source):
+        if(source == "TiVo"):
+            self.show_tivo()
+        elif(source == "Live TV"):
+            self.show_live()
+        elif(source == "Guide"):
+            self.show_guide()
+        elif(source == "My Shows"):
+            self.show_now()
+        elif(source == "Now Playing"):
+            self.send_code('EXIT', 'IRCODE')
+            self._current["mode"] = "NOWPLAYING"
+            return data.decode()
+        elif(source == "On-Demand"):
+            self.show_vod()
+        else:
+            self.send_code(source.upper(), 'TELEPORT')
+            self._current["mode"] = source.upper()
+            return data.decode()
+
+    @property
     def media_play(self):
         """Send play command."""
         if self._is_standby:
@@ -651,4 +685,3 @@ class TivoDevice(MediaPlayerDevice):
         zparams['aid']         = 'gapzap'
 
         return zparams
-
